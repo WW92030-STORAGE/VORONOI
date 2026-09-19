@@ -13,6 +13,7 @@ typedef std::pair<numeric, numeric> point;
 typedef std::pair<int, int> indexPair;
 
 constexpr point INF = {FLT_MAX, FLT_MAX};
+constexpr numeric EPSILON = 1e-12;
 
 // 3x3 minor matrix det
 inline numeric det4min(std::vector<std::vector<numeric>>& mat, int col_skipped) {
@@ -32,25 +33,54 @@ inline numeric det4min(std::vector<std::vector<numeric>>& mat, int col_skipped) 
 	return res;
 }
 
+inline numeric det3(std::vector<std::vector<numeric>>& mat) {
+	numeric res = 0;
+	for (int i = 0; i < 3; i++) {
+		res += mat[0][i] * mat[1][(i + 1) % 3] * mat[2][(i + 2) % 3];
+		res -= mat[0][(i + 2) % 3] * mat[1][(i + 1) % 3] * mat[2][i];
+	}
+	return res;
+}
+
 inline numeric det4(std::vector<std::vector<numeric>>& mat) {
 	return mat[0][0] * det4min(mat, 0) - mat[0][1] * det4min(mat, 1) + mat[0][2] * det4min(mat, 2) - mat[0][3] * det4min(mat, 3);
 }
 
 // is d in circle(a, b, c)?
-inline bool inCircle(point a, point b, point c, point d) {
+// updated to be a lot more fucked up than before
+inline bool inCircleNaive(point a, point b, point c, point d) {
 	std::vector<std::vector<numeric>> mat(4);
 	mat[0] = std::vector<numeric>({a.first, a.second, a.first * a.first + a.second * a.second, 1});
 	mat[1] = std::vector<numeric>({b.first, b.second, b.first * b.first + b.second * b.second, 1});
 	mat[2] = std::vector<numeric>({c.first, c.second, c.first * c.first + c.second * c.second, 1});
 	mat[3] = std::vector<numeric>({d.first, d.second, d.first * d.first + d.second * d.second, 1});
-	return det4(mat) > 0;
+	return det4(mat) > EPSILON;
+}
+
+// wikipedia's alternative
+inline bool inCircle(point a, point b, point c, point d) {
+	a = {a.first - d.first, a.second - d.second};
+	b = {b.first - d.first, b.second - d.second};
+	c = {c.first - d.first, c.second - d.second};
+
+	numeric maxMag = std::max(a.first, a.second);
+	maxMag = std::max(maxMag, std::max(b.first, b.second));
+	maxMag = std::max(maxMag, std::max(c.first, c.second));
+
+	std::vector<std::vector<numeric>> mat(3);
+	mat[0] = std::vector<numeric>({a.first, a.second, a.first * a.first + a.second * a.second});
+	mat[1] = std::vector<numeric>({b.first, b.second, b.first * b.first + b.second * b.second});
+	mat[2] = std::vector<numeric>({c.first, c.second, c.first * c.first + c.second * c.second});
+
+	numeric eps = eps * maxMag;
+	return det3(mat) > eps;
 }
 
 // positive if a, b, c are in counterclockwise order, negative if clockwise, 0 if collinear
 inline int ccw(point a, point b, point c) {
 	numeric x = (b.second - a.second) * (c.first - b.first) - (b.first - a.first) * (c.second - b.second);
-	if (x > 0) return -1;
-	if (x < 0) return 1;
+	if (x > EPSILON) return -1;
+	if (x < -EPSILON) return 1;
 	return 0;
 }
 
@@ -177,7 +207,7 @@ std::pair<quadEdge*, quadEdge*> triangulateUtil(std::vector<point>& points, int 
 		splice(a->sym(), b);
 		int status = ccw(points[L], points[L + 1], points[H]);
 		if (status > 0) {
-			connect(b, a);
+			quadEdge* c = connect(b, a);
 			return {a, b->sym()};
 		}
 		if (status < 0) {
