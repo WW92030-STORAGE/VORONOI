@@ -97,9 +97,14 @@ std::pair<double, double> circumcenter(point a, point b, point c) {
 
 // positive if a, b, c are in counterclockwise order, negative if clockwise, 0 if collinear
 inline int ccw(point a, point b, point c) {
+	numeric maxMag = std::max(a.first, a.second);
+	maxMag = std::max(maxMag, std::max(b.first, b.second));
+	maxMag = std::max(maxMag, std::max(c.first, c.second));
+	numeric eps = EPSILON * maxMag;
+
 	numeric x = (b.second - a.second) * (c.first - b.first) - (b.first - a.first) * (c.second - b.second);
-	if (x > EPSILON) return -1;
-	if (x < -EPSILON) return 1;
+	if (x > eps) return -1;
+	if (x < -eps) return 1;
 	return 0;
 }
 
