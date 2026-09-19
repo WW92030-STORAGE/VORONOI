@@ -7,16 +7,43 @@
 #include <map>
 #include <utility>
 #include <cmath>
+#include <unordered_map>
 
 typedef double numeric; // any numeric type
 typedef std::pair<numeric, numeric> point;
-typedef std::pair<int, int> indexPair;
 
 constexpr point INF = {FLT_MAX, FLT_MAX};
 constexpr numeric EPSILON = 1e-12;
 
+struct indexPair {
+	int first;
+	int second;
+
+	bool operator<(const indexPair& other) const {
+		if (first != other.first) return first < other.first;
+		return second < other.second;
+	}
+
+	bool operator==(const indexPair& other) const {
+		return first == other.first && second == other.second;
+	}
+};
+
+// https://ianyepan.github.io/posts/cpp-custom-hash/
+// https://stackoverflow.com/questions/5889238/why-is-xor-the-default-way-to-combine-hashes
+namespace std {
+    template <>
+    struct hash<indexPair> {
+        size_t operator()(const indexPair& p) const {
+            size_t h1 = hash<int>()(p.first);
+            size_t h2 = hash<int>()(p.second);
+            return h1 ^ (h2 + (h1<<6) + (h2>>2));
+        }
+    };
+}
+
 // 3x3 minor matrix det
-inline numeric det4min(std::vector<std::vector<numeric>>& mat, int col_skipped) {
+inline numeric det4min(numeric(&mat)[4][4], int col_skipped) {
 	int indices[6] = {0, 1, 2};
 	for (int i = 0; i < 3; i++) {
 		if (indices[i] >= col_skipped) indices[i]++;
@@ -33,27 +60,35 @@ inline numeric det4min(std::vector<std::vector<numeric>>& mat, int col_skipped) 
 	return res;
 }
 
-inline numeric det3(std::vector<std::vector<numeric>>& mat) {
+inline numeric det3(numeric(&mat)[3][3]) {
 	numeric res = 0;
 	for (int i = 0; i < 3; i++) {
+		/*
 		res += mat[0][i] * mat[1][(i + 1) % 3] * mat[2][(i + 2) % 3];
 		res -= mat[0][(i + 2) % 3] * mat[1][(i + 1) % 3] * mat[2][i];
+		*/
+		int next = (i + 1) % 3;
+		int prev = (i + 2) % 3;
+		res += mat[0][i] * (mat[1][next] * mat[2][prev] - mat[1][prev] * mat[2][next]);
 	}
 	return res;
 }
 
-inline numeric det4(std::vector<std::vector<numeric>>& mat) {
+inline numeric det4(numeric(&mat)[4][4]) {
 	return mat[0][0] * det4min(mat, 0) - mat[0][1] * det4min(mat, 1) + mat[0][2] * det4min(mat, 2) - mat[0][3] * det4min(mat, 3);
 }
 
 // is d in circle(a, b, c)?
 // updated to be a lot more fucked up than before
 inline bool inCircleNaive(point a, point b, point c, point d) {
-	std::vector<std::vector<numeric>> mat(4);
-	mat[0] = std::vector<numeric>({a.first, a.second, a.first * a.first + a.second * a.second, 1});
-	mat[1] = std::vector<numeric>({b.first, b.second, b.first * b.first + b.second * b.second, 1});
-	mat[2] = std::vector<numeric>({c.first, c.second, c.first * c.first + c.second * c.second, 1});
-	mat[3] = std::vector<numeric>({d.first, d.second, d.first * d.first + d.second * d.second, 1});
+	numeric mat[4][4];
+	point p[4] = {a, b, c, d};
+	for (int i = 0; i < 4; i++) {
+		mat[i][0] = p[i].first;
+		mat[i][1] = p[i].second;
+		mat[i][2] = mat[i][0] * mat[i][0] + mat[i][1] * mat[i][1];
+		mat[i][3] = 1;
+	}
 	return det4(mat) > EPSILON;
 }
 
@@ -67,17 +102,20 @@ inline bool inCircle(point a, point b, point c, point d) {
 	maxMag = std::max(maxMag, std::max(b.first, b.second));
 	maxMag = std::max(maxMag, std::max(c.first, c.second));
 
-	std::vector<std::vector<numeric>> mat(3);
-	mat[0] = std::vector<numeric>({a.first, a.second, a.first * a.first + a.second * a.second});
-	mat[1] = std::vector<numeric>({b.first, b.second, b.first * b.first + b.second * b.second});
-	mat[2] = std::vector<numeric>({c.first, c.second, c.first * c.first + c.second * c.second});
+	numeric mat[3][3];
+	point p[3] = {a, b, c};
+	for (int i = 0; i < 3; i++) {
+		mat[i][0] = p[i].first;
+		mat[i][1] = p[i].second;
+		mat[i][2] = mat[i][0] * mat[i][0] + mat[i][1] * mat[i][1];
+	}
 
 	numeric eps = eps * maxMag;
 	return det3(mat) > eps;
 }
 
 // compute a circumcenter
-std::pair<double, double> circumcenter(point a, point b, point c) {
+std::pair<double, double> circumcenterNaive(point a, point b, point c) {
 	numeric maxMag = std::max(a.first, a.second);
 	maxMag = std::max(maxMag, std::max(b.first, b.second));
 	maxMag = std::max(maxMag, std::max(c.first, c.second));
@@ -93,6 +131,23 @@ std::pair<double, double> circumcenter(point a, point b, point c) {
 	if (abs(D) < EPSILON * maxMag) return {(a.first + b.first + c.first) / 3.0, (a.second + b.second + c.second) / 3.0};
 	double invD = 1.0 / D;
 	return {invD * (arsq * bc.second + brsq * ca.second + crsq * ab.second), -invD * (arsq * bc.first + brsq * ca.first + crsq * ab.first)};
+}
+
+// translate point a to the origin and the rest of the coordinate system alongside that.
+std::pair<double, double> circumcenter(point a, point b, point c) {
+	b = {b.first - a.first, b.second - a.second};
+	c = {c.first - a.first, c.second - a.second};
+
+	numeric maxMag = std::max(c.first, c.second);
+	maxMag = std::max(maxMag, std::max(b.first, b.second));
+
+	numeric brsq = b.first * b.first + b.second * b.second;
+	numeric crsq = c.first * c.first + c.second * c.second;
+
+	double D = 2 * (b.first * c.second - c.first * b.second);
+	if (abs(D) < EPSILON * maxMag) return {a.first + (b.first + c.first) / 3.0, a.second + (b.second + c.second) / 3.0};
+	double invD = 1.0 / D;
+	return {a.first + invD * (brsq * c.second - crsq * b.second), a.second + -invD * (brsq * c.first - crsq * b.first)};
 }
 
 // positive if a, b, c are in counterclockwise order, negative if clockwise, 0 if collinear
@@ -113,6 +168,11 @@ inline std::string p2str(point p) {
 }
 
 inline point sort(point p) {
+	if (p.first > p.second) return {p.second, p.first};
+	return p;
+}
+
+inline indexPair sort(indexPair p) {
 	if (p.first > p.second) return {p.second, p.first};
 	return p;
 }
@@ -312,7 +372,7 @@ std::pair<std::vector<std::vector<int>>, std::vector<indexPair>> triangulate(std
 	std::queue<quadEdge*> q;
 	q.push(e);
 
-	std::map<indexPair, quadEdge*> usedEdges;
+	std::unordered_map<indexPair, quadEdge*> usedEdges;
 	while (ccw(e->onext->dest(), e->dest(), e->origin) < 0) e = e->onext;
 
 	quadEdge* ee = e;
@@ -360,11 +420,11 @@ Note that this does not compute the precise direction of such edges to infinity.
 */
 
 std::pair<std::vector<indexPair>, std::vector<std::pair<int, indexPair>>> voronoi(std::vector<std::vector<int>> tri) {
-	std::map<indexPair, std::vector<int>> edgemap;
+	std::unordered_map<indexPair, std::vector<int>> edgemap;
 	for (int i = 0; i < tri.size(); i++) {
 		auto t = tri[i];
 		for (int j = 0; j < 3; j++) {
-			auto p = sort({t[j], t[(j + 1) % 3]});
+			auto p = sort(indexPair{t[j], t[(j + 1) % 3]});
 			if (edgemap.find(p) == edgemap.end()) edgemap[p] = std::vector<int>();
 			edgemap[p].push_back(i);
 		}
