@@ -76,6 +76,25 @@ inline bool inCircle(point a, point b, point c, point d) {
 	return det3(mat) > eps;
 }
 
+// compute a circumcenter
+std::pair<double, double> circumcenter(point a, point b, point c) {
+	numeric maxMag = std::max(a.first, a.second);
+	maxMag = std::max(maxMag, std::max(b.first, b.second));
+	maxMag = std::max(maxMag, std::max(c.first, c.second));
+	
+	numeric arsq = a.first * a.first + a.second * a.second;
+	numeric brsq = b.first * b.first + b.second * b.second;
+	numeric crsq = c.first * c.first + c.second * c.second;
+
+	point bc = {b.first - c.first, b.second - c.second};
+	point ca = {c.first - a.first, c.second - a.second};
+	point ab = {a.first - b.first, a.second - b.second};
+	double D = 2 * (a.first * bc.second + b.first * ca.second + c.first * ab.second);
+	if (abs(D) < EPSILON * maxMag) return {(a.first + b.first + c.first) / 3.0, (a.second + b.second + c.second) / 3.0};
+	double invD = 1.0 / D;
+	return {invD * (arsq * bc.second + brsq * ca.second + crsq * ab.second), -invD * (arsq * bc.first + brsq * ca.first + crsq * ab.first)};
+}
+
 // positive if a, b, c are in counterclockwise order, negative if clockwise, 0 if collinear
 inline int ccw(point a, point b, point c) {
 	numeric x = (b.second - a.second) * (c.first - b.first) - (b.first - a.first) * (c.second - b.second);
@@ -324,20 +343,6 @@ std::pair<std::vector<std::vector<int>>, std::vector<indexPair>> triangulate(std
 	}
 
 	return {res, finalEdges};
-}
-
-std::pair<double, double> circumcenter(point a, point b, point c) {
-	numeric arsq = a.first * a.first + a.second * a.second;
-	numeric brsq = b.first * b.first + b.second * b.second;
-	numeric crsq = c.first * c.first + c.second * c.second;
-
-	point bc = {b.first - c.first, b.second - c.second};
-	point ca = {c.first - a.first, c.second - a.second};
-	point ab = {a.first - b.first, a.second - b.second};
-	double D = 2 * (a.first * bc.second + b.first * ca.second + c.first * ab.second);
-	if (D == 0) return {(a.first + b.first + c.first) / 3.0, (a.second + b.second + c.second) / 3.0};
-	float invD = 1.0 / D;
-	return {invD * (arsq * bc.second + brsq * ca.second + crsq * ab.second), -invD * (arsq * bc.first + brsq * ca.first + crsq * ab.first)};
 }
 
 /*
