@@ -12,9 +12,9 @@ int main() {
 	for (int i = 0; i < 64; i++) pp.insert({M + rand() % (B - 2 * M), M + rand() % (B - 2 * M)});
 	for (auto i : pp) p.push_back(i);
 
-	// p = std::vector<point>({{0, 0}, {4, 0}, {4, 4}});
+	// p = std::vector<point>({{1200, 1200}, {400, 1200}, {400, 400}, {400, 800}, {800, 800}, {800, 1200}, {1200, 800}, {800, 400}, {1200, 400}});
 
-	std::cout << B << "\n";
+	std::cout << B << "\n"; // This line is used for the python renderer to set the image size
 
 	std::string s = generateDiagram(p);
 	std::cout << s << "\n";

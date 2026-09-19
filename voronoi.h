@@ -238,6 +238,15 @@ std::pair<quadEdge*, quadEdge*> triangulateUtil(std::vector<point>& points, int 
 	return {ldo, rdo};
 }
 
+/*
+
+Performs a Delaunay triangulation. Returns two values: a list of triangles T[i] = [a, b, c] where p[a], p[b], p[c] is a triangle
+and a list of edges E[i] = [a, b] where p[a], p[b] is an edge in the triangulation.
+
+Note that the points array p[...] is sorted during this process.
+
+*/
+
 std::pair<std::vector<std::vector<int>>, std::vector<indexPair>> triangulate(std::vector<point>& points) {
 	std::sort(points.begin(), points.end());
 	std::vector<std::vector<int>> res;
@@ -278,6 +287,7 @@ std::pair<std::vector<std::vector<int>>, std::vector<indexPair>> triangulate(std
 
 	for (int i = 0; i < p.size(); i += 3) res.push_back(std::vector<int>({p[i], p[i + 1], p[i + 2]}));
 
+	// delEdge handles the memory leak since it takes care of all four quadEdge instances at once.
 	for (auto x : usedEdges) {
 		finalEdges.push_back(x.first);
 		delEdge(x.second);
@@ -299,6 +309,15 @@ std::pair<double, double> circumcenter(point a, point b, point c) {
 	float invD = 1.0 / D;
 	return {invD * (arsq * bc.second + brsq * ca.second + crsq * ab.second), -invD * (arsq * bc.first + brsq * ca.first + crsq * ab.first)};
 }
+
+/*
+
+Generates a Voronoi diagram given a list of triangles tri[i] = [a, b, c] where a, b, c are indices of points.
+Returns two vectors: first a vector of index pairs representing edges connecting circumcenters of triangles...
+and a vector containing [i, [a, b]] each one denoting an edge to infinity starting from the circumcenter of triangle tri[i] and bisecting the edge (p[a], p[b]) of the triangle.
+Note that this does not compute the precise direction of such edges to infinity.
+
+*/
 
 std::pair<std::vector<indexPair>, std::vector<std::pair<int, indexPair>>> voronoi(std::vector<std::vector<int>> tri) {
 	std::map<indexPair, std::vector<int>> edgemap;
@@ -324,45 +343,125 @@ std::pair<std::vector<indexPair>, std::vector<std::pair<int, indexPair>>> vorono
 	return {res, infs};
 }
 
+/*
+
+The output of generateDiagram is a formatted string that encodes all information about a Delaunay Triangulation and optionally Voronoi diagram
+
+The first line: a number N, the number of points
+The next N lines: two numbers each, representing a single point p[0] ... p[N - 1]. The order is that of the sorted points array used in computation.
+The next line: a number M, the number of triangles.
+The next M lines: three numbers each, representing a single triangle tri[i] = [a, b, c] where p[a], p[b], p[c] is a triangle.
+
+If doV is FALSE then the formatting stops here. Otherwise, continue:
+
+The next M lines: two numbers each, representing circumcenters circ[i] where circ[i] is the circumcenter of tri[i]
+The next line: a single number E, the number of Voronoi edges formed by directly connecting circumcenters together.
+The next E lines: two numbers each, representing an edge intr[i] = [a, b] connecting circ[a] and circ[b] of tri[a] and tri[b].
+The next line: a single number X, the number of Voronoi edges that go off into infinity due to a Delaunay triangle side being exposed to the outermost face of the triangulation graph.
+The next X lines: three numbers [i, x, y] denoting a ray starting at circ[i] and direction <x, y>
+
+EXAMPLE
+
+9
+0.000000 0.000000
+0.000000 4.000000
+0.000000 8.000000
+4.000000 0.000000
+4.000000 4.000000
+4.000000 8.000000
+8.000000 0.000000
+8.000000 4.000000
+8.000000 8.000000
+8
+0 3 1 
+2 1 4 
+5 2 4 
+8 5 7 
+6 7 4 
+3 6 4 
+1 3 4 
+5 4 7 
+// Ends above this line if doV is false, continues (not including this line) below if true.
+2.000000 2.000000
+2.000000 6.000000
+2.000000 6.000000
+6.000000 6.000000
+6.000000 2.000000
+6.000000 2.000000
+2.000000 2.000000
+6.000000 6.000000
+8
+0 6
+1 6
+1 2
+5 6
+2 7
+4 5
+4 7
+3 7
+8
+0 -1.000000 0.000000
+0 0.000000 -1.000000
+1 -1.000000 0.000000
+2 -0.000000 1.000000
+5 0.000000 -1.000000
+3 -0.000000 1.000000
+4 1.000000 -0.000000
+3 1.000000 -0.000000
+
+
+
+*/
+
 std::string generateDiagram(std::vector<point> p, bool doV = true) {
 	std::string ret = "";
 	auto res = triangulate(p);
-	auto v = res.first;
+	auto tri = res.first;
 	auto e = res.second;
 
+	// N points
 	ret += std::to_string(p.size()) + "\n";
-
 	for (auto i : p) ret += std::to_string(i.first) + " " + std::to_string(i.second) + "\n";
-	ret += std::to_string(v.size()) + "\n";
 
-	for (auto i : v) {
+	// M edges
+	ret += std::to_string(tri.size()) + "\n";
+	for (auto i : tri) {
 		for (auto j : i) ret += std::to_string(j) + " ";
 		ret.push_back('\n');
 	}
-	std::vector<point> circums;
-	for (auto i : v) {
-		auto cc = circumcenter(p[i[0]], p[i[1]], p[i[2]]);
-		ret += std::to_string(cc.first) + " " + std::to_string(cc.second) + "\n";
-		circums.push_back(cc);
-	}
+
 	if (!doV) return ret;
 
-	auto vor = voronoi(v);
-	auto interior = vor.first;
+	// M circumcenters
+	std::vector<point> circ;
+	for (auto i : tri) {
+		auto cc = circumcenter(p[i[0]], p[i[1]], p[i[2]]);
+		ret += std::to_string(cc.first) + " " + std::to_string(cc.second) + "\n";
+		circ.push_back(cc);
+	}
+	
+	// compute the voronoi data
+	auto vor = voronoi(tri);
+	auto intr = vor.first;
 	auto inf = vor.second;
-	ret += std::to_string(interior.size()) + "\n";
-	for (auto i : interior) ret += std::to_string(i.first) + " " + std::to_string(i.second) + "\n";
+
+	// E internal edges
+	ret += std::to_string(intr.size()) + "\n";
+	for (auto i : intr) ret += std::to_string(i.first) + " " + std::to_string(i.second) + "\n";
+
+	// X external edges
 	ret += std::to_string(inf.size()) + "\n";
 	for (auto i : inf) {
-		point location = circums[i.first];
+		point location = circ[i.first];
 		point a = p[i.second.first];
 		point b = p[i.second.second];
-		int ci = v[i.first][0];
+		int ci = tri[i.first][0];
 		for (int j = 0; j < 3; j++) {
-			if (v[i.first][j] != i.second.first && v[i.first][j] != i.second.second) ci = v[i.first][j];
+			if (tri[i.first][j] != i.second.first && tri[i.first][j] != i.second.second) ci = tri[i.first][j];
 		}
 		point c = p[ci];
 
+		// The edge is a ray that is perpendicular to the triangle side it represents.
 		point dir = {b.first - a.first, b.second - a.second};
 		numeric norm = sqrt(dir.first * dir.first + dir.second * dir.second);
 		if (norm > 0) {

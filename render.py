@@ -3,6 +3,8 @@ from PIL import Image, ImageDraw
 
 INPUT = "voronoi.out"
 
+# The input format is the same as generateDiagram() except with a single number at the top before everything else, representing the image size.
+
 def run(WIDTH = 4, R = 16, POINTS = 0xFFFFFF, DELAUNAY = 0x0000FF, VORONOI = 0xFFFF00, CIRCUMS = None):
 	with open(INPUT, 'r') as F:
 		B = int(F.readline())
@@ -33,8 +35,8 @@ def run(WIDTH = 4, R = 16, POINTS = 0xFFFFFF, DELAUNAY = 0x0000FF, VORONOI = 0xF
 			i1, i2 = [int(x) for x in F.readline().split()]
 			ve.append((i1, i2))
 		
-		INF = int(F.readline())
-		for i in range(INF):
+		X = int(F.readline())
+		for i in range(X):
 			sp = F.readline().split()
 			infs.append((int(sp[0]), float(sp[1]), float(sp[2])))
 
