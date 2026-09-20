@@ -10,9 +10,9 @@
 #include <unordered_map>
 
 typedef double numeric; // any numeric type
-typedef std::pair<numeric, numeric> point;
+typedef std::pair<numeric, numeric> vorPoint;
 
-constexpr point INF = {FLT_MAX, FLT_MAX};
+constexpr vorPoint INF = {FLT_MAX, FLT_MAX};
 constexpr numeric EPSILON = 1e-12;
 
 struct indexPair {
@@ -55,7 +55,7 @@ inline numeric det4min(numeric(&mat)[4][4], int col_skipped) {
 		int i0 = indices[i];
 		int i1 = indices[i + 1];
 		int i2 = indices[i + 2];
-		res += mat[1][i0] * mat[2][i1] * mat[3][i2] - mat[1][i2] * mat[2][i1] * mat[3][i0];
+		res += mat[1][i0] * (mat[2][i1] * mat[3][i2] - mat[2][i2] * mat[3][i1]);
 	}
 	return res;
 }
@@ -80,9 +80,9 @@ inline numeric det4(numeric(&mat)[4][4]) {
 
 // is d in circle(a, b, c)?
 // updated to be a lot more fucked up than before
-inline bool inCircleNaive(point a, point b, point c, point d) {
+inline bool inCircleNaive(vorPoint a, vorPoint b, vorPoint c, vorPoint d) {
 	numeric mat[4][4];
-	point p[4] = {a, b, c, d};
+	vorPoint p[4] = {a, b, c, d};
 	for (int i = 0; i < 4; i++) {
 		mat[i][0] = p[i].first;
 		mat[i][1] = p[i].second;
@@ -93,7 +93,7 @@ inline bool inCircleNaive(point a, point b, point c, point d) {
 }
 
 // wikipedia's alternative
-inline bool inCircle(point a, point b, point c, point d) {
+inline bool inCircle(vorPoint a, vorPoint b, vorPoint c, vorPoint d) {
 	a = {a.first - d.first, a.second - d.second};
 	b = {b.first - d.first, b.second - d.second};
 	c = {c.first - d.first, c.second - d.second};
@@ -103,7 +103,7 @@ inline bool inCircle(point a, point b, point c, point d) {
 	maxMag = std::max(maxMag, std::max(c.first, c.second));
 
 	numeric mat[3][3];
-	point p[3] = {a, b, c};
+	vorPoint p[3] = {a, b, c};
 	for (int i = 0; i < 3; i++) {
 		mat[i][0] = p[i].first;
 		mat[i][1] = p[i].second;
@@ -115,7 +115,7 @@ inline bool inCircle(point a, point b, point c, point d) {
 }
 
 // compute a circumcenter
-std::pair<double, double> circumcenterNaive(point a, point b, point c) {
+std::pair<double, double> circumcenterNaive(vorPoint a, vorPoint b, vorPoint c) {
 	numeric maxMag = std::max(a.first, a.second);
 	maxMag = std::max(maxMag, std::max(b.first, b.second));
 	maxMag = std::max(maxMag, std::max(c.first, c.second));
@@ -124,9 +124,9 @@ std::pair<double, double> circumcenterNaive(point a, point b, point c) {
 	numeric brsq = b.first * b.first + b.second * b.second;
 	numeric crsq = c.first * c.first + c.second * c.second;
 
-	point bc = {b.first - c.first, b.second - c.second};
-	point ca = {c.first - a.first, c.second - a.second};
-	point ab = {a.first - b.first, a.second - b.second};
+	vorPoint bc = {b.first - c.first, b.second - c.second};
+	vorPoint ca = {c.first - a.first, c.second - a.second};
+	vorPoint ab = {a.first - b.first, a.second - b.second};
 	double D = 2 * (a.first * bc.second + b.first * ca.second + c.first * ab.second);
 	if (abs(D) < EPSILON * maxMag) return {(a.first + b.first + c.first) / 3.0, (a.second + b.second + c.second) / 3.0};
 	double invD = 1.0 / D;
@@ -134,7 +134,7 @@ std::pair<double, double> circumcenterNaive(point a, point b, point c) {
 }
 
 // translate point a to the origin and the rest of the coordinate system alongside that.
-std::pair<double, double> circumcenter(point a, point b, point c) {
+std::pair<double, double> circumcenter(vorPoint a, vorPoint b, vorPoint c) {
 	b = {b.first - a.first, b.second - a.second};
 	c = {c.first - a.first, c.second - a.second};
 
@@ -151,7 +151,7 @@ std::pair<double, double> circumcenter(point a, point b, point c) {
 }
 
 // positive if a, b, c are in counterclockwise order, negative if clockwise, 0 if collinear
-inline int ccw(point a, point b, point c) {
+inline int ccw(vorPoint a, vorPoint b, vorPoint c) {
 	numeric maxMag = std::max(a.first, a.second);
 	maxMag = std::max(maxMag, std::max(b.first, b.second));
 	maxMag = std::max(maxMag, std::max(c.first, c.second));
@@ -163,11 +163,11 @@ inline int ccw(point a, point b, point c) {
 	return 0;
 }
 
-inline std::string p2str(point p) {
+inline std::string p2str(vorPoint p) {
 	return "(" + std::to_string(p.first) + ", " + std::to_string(p.second) + ")";
 }
 
-inline point sort(point p) {
+inline vorPoint sort(vorPoint p) {
 	if (p.first > p.second) return {p.second, p.first};
 	return p;
 }
@@ -193,7 +193,7 @@ dest = sym->origin
 */
 
 struct quadEdge {
-	point origin;
+	vorPoint origin;
 	int originIndex = -1;
 	quadEdge* rot = 0;
 	quadEdge* onext = 0;
@@ -203,7 +203,7 @@ struct quadEdge {
 	inline quadEdge* lnext() { return rot->sym()->onext->rot; }
 	inline quadEdge* oprev() { return rot->onext->rot; }
 	inline quadEdge* rprev() { return sym()->onext; }
-	inline point dest() { return sym()->origin; }
+	inline vorPoint dest() { return sym()->origin; }
 	inline int destIndex() { return sym()->originIndex; }
 	inline indexPair indices() {
 		indexPair p = {originIndex, destIndex()};
@@ -221,7 +221,7 @@ struct quadEdge {
 	}
 
 	quadEdge() {}
-	quadEdge(point s, point d, int si = 0, int di = 0) {
+	quadEdge(vorPoint s, vorPoint d, int si = 0, int di = 0) {
 		quadEdge* rot_ = new quadEdge;
 		quadEdge* sym = new quadEdge;
 		quadEdge* rrot = new quadEdge;
@@ -269,15 +269,15 @@ inline quadEdge* connect(quadEdge* a, quadEdge* b) {
 	return e;
 }
 
-inline bool rightOf(point x, quadEdge* e) {
+inline bool rightOf(vorPoint x, quadEdge* e) {
 	return ccw(x, e->dest(), e->origin) > 0;
 }
 
-inline bool leftOf(point x, quadEdge* e) {
+inline bool leftOf(vorPoint x, quadEdge* e) {
 	return ccw(x, e->origin, e->dest()) > 0;
 }
 
-std::pair<quadEdge*, quadEdge*> triangulateUtil(std::vector<point>& points, int L = 0, int H = -1) {
+std::pair<quadEdge*, quadEdge*> triangulateUtil(std::vector<vorPoint>& points, int L = 0, int H = -1) {
 	int n = points.size();
 	if (L < 0) L = 0;
 	if (H >= n || H < 0) H = n - 1;
@@ -361,7 +361,7 @@ Note that the points array p[...] is sorted during this process.
 
 */
 
-std::pair<std::vector<std::vector<int>>, std::vector<indexPair>> triangulate(std::vector<point>& points) {
+std::pair<std::vector<std::vector<int>>, std::vector<indexPair>> triangulate(std::vector<vorPoint>& points) {
 	std::sort(points.begin(), points.end());
 	std::vector<std::vector<int>> res;
 	std::vector<indexPair> finalEdges;
@@ -513,7 +513,7 @@ EXAMPLE
 
 */
 
-std::string generateDiagram(std::vector<point> p, bool doV = true) {
+std::string generateDiagram(std::vector<vorPoint> p, bool doV = true) {
 	std::string ret = "";
 	auto res = triangulate(p);
 	auto tri = res.first;
@@ -533,7 +533,7 @@ std::string generateDiagram(std::vector<point> p, bool doV = true) {
 	if (!doV) return ret;
 
 	// M circumcenters
-	std::vector<point> circ;
+	std::vector<vorPoint> circ;
 	for (auto i : tri) {
 		auto cc = circumcenter(p[i[0]], p[i[1]], p[i[2]]);
 		ret += std::to_string(cc.first) + " " + std::to_string(cc.second) + "\n";
@@ -552,17 +552,17 @@ std::string generateDiagram(std::vector<point> p, bool doV = true) {
 	// X external edges
 	ret += std::to_string(inf.size()) + "\n";
 	for (auto i : inf) {
-		point location = circ[i.first];
-		point a = p[i.second.first];
-		point b = p[i.second.second];
+		vorPoint location = circ[i.first];
+		vorPoint a = p[i.second.first];
+		vorPoint b = p[i.second.second];
 		int ci = tri[i.first][0];
 		for (int j = 0; j < 3; j++) {
 			if (tri[i.first][j] != i.second.first && tri[i.first][j] != i.second.second) ci = tri[i.first][j];
 		}
-		point c = p[ci];
+		vorPoint c = p[ci];
 
 		// The edge is a ray that is perpendicular to the triangle side it represents.
-		point dir = {b.first - a.first, b.second - a.second};
+		vorPoint dir = {b.first - a.first, b.second - a.second};
 		numeric norm = sqrt(dir.first * dir.first + dir.second * dir.second);
 		if (norm > 0) {
 			numeric inv = 1.0 / norm;
